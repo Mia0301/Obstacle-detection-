@@ -7,53 +7,54 @@ Created on Mon May  4 10:41:40 2026
 
 import streamlit as st
 from PIL import Image
+import random
+import cv2
+import numpy as np
+import tempfile
 
-st.set_page_config(page_title="Obstacle Detection UI Prototype", layout="wide")
+st.set_page_config(layout="wide")
+st.title("🚗 Obstacle Detection System (Prototype)")
 
-st.title("🚗 Autonomous Driving Obstacle Detection System")
-st.write("UI Prototype for Real-Time Road Condition Detection")
+uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
-st.markdown("### System Flow")
-st.info("Camera Input → YOLO Detection → Distance Estimation → Warning Output")
+def fake_detection(img):
+    h, w, _ = img.shape
 
-uploaded_file = st.file_uploader(
-    "Upload a road image or video",
-    type=["jpg", "jpeg", "png", "mp4"]
-)
+    # 隨機框
+    x1 = random.randint(0, w//2)
+    y1 = random.randint(0, h//2)
+    x2 = x1 + random.randint(100, 300)
+    y2 = y1 + random.randint(100, 300)
 
-col1, col2 = st.columns([2, 1])
+    label = random.choice(["Car", "Pedestrian", "Cyclist"])
+    conf = round(random.uniform(0.7, 0.95), 2)
 
-with col1:
-    st.subheader("Detection Preview")
+    cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
+    cv2.putText(img, f"{label} {conf}", (x1, y1-10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
-    if uploaded_file is not None:
-        if uploaded_file.type.startswith("image"):
-            image = Image.open(uploaded_file)
-            st.image(image, caption="Uploaded Image", use_container_width=True)
-        else:
-            st.video(uploaded_file)
+    area = (x2-x1)*(y2-y1)
+
+    if area > 80000:
+        status = "Danger 🔴"
+    elif area > 30000:
+        status = "Warning 🟡"
     else:
-        st.warning("Please upload an image or video.")
+        status = "Safe 🟢"
 
-with col2:
-    st.subheader("Detection Information")
+    return img, label, conf, status
 
-    st.markdown("**Detected Objects (Mock Data)**")
-    st.write("🚘 Car | Confidence: 0.91 | Distance: 12m")
-    st.success("Status: Safe")
+if uploaded_file:
+    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, 1)
 
-    st.write("🚶 Pedestrian | Confidence: 0.82 | Distance: 6m")
-    st.warning("Status: Warning")
+    img, label, conf, status = fake_detection(img)
 
-    st.write("🚴 Cyclist | Confidence: 0.76 | Distance: 3m")
-    st.error("Status: Danger")
+    col1, col2 = st.columns([2,1])
 
-st.markdown("---")
-st.subheader("Planned Functions")
-st.write("""
-- Real-time camera or video input
-- YOLO-based object detection
-- Distance estimation using LiDAR or simulated distance
-- Safety warning system
-- Streamlit-based visualization interface
-""")
+    col1.image(img, channels="BGR", use_container_width=True)
+
+    col2.subheader("Detection Info")
+    col2.write(f"Object: {label}")
+    col2.write(f"Confidence: {conf}")
+    col2.write(f"Status: {status}")
