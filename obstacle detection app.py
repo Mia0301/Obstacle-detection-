@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 st.set_page_config(layout="wide")
-st.title("🚗 Obstacle Detection System (Prototype with Distance)")
+st.title("🚗 Obstacle Detection System (Prototype)")
 
 uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
