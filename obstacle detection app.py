@@ -57,21 +57,20 @@ else:
 
 def estimate_distance(x1, y1, x2, y2):
     """
-    使用 Bounding Box 面積估算距離。
-    框越大代表物體越近，框越小代表物體越遠。
+    使用 bounding box 高度估算距離。
+    框越高代表越近，框越低代表越遠。
     """
 
-    area = max(1, (x2 - x1) * (y2 - y1))
+    box_height = max(1, y2 - y1)
 
-    if area > 120000:
-        return 2.0
-    elif area > 70000:
-        return 5.0
-    elif area > 30000:
-        return 10.0
-    else:
-        return 20.0
+    distance = 1200 / box_height
 
+    if distance < 2:
+        distance = 2
+    elif distance > 40:
+        distance = 40
+
+    return distance
 
 def assess_risk(distance_m, approaching_speed_mps):
     """
