@@ -7,11 +7,11 @@ from ultralytics import YOLO
 st.set_page_config(page_title="Obstacle Detection System", layout="wide")
 
 st.title("🚗 Obstacle Detection System")
-st.write("YOLOv8 + Camera / Upload + Hardware Distance Simulation + TTC Risk Assessment")
+st.write("YOLOv8 + Distance Estimation + Approaching Speed + TTC Risk Assessment")
 
 @st.cache_resource
 def load_model():
-    return YOLO("best_camera.pt")
+    return YOLO("best_camera.pt") 
 
 model = load_model()
 
@@ -25,22 +25,18 @@ st.sidebar.header("System Settings")
 
 confidence_threshold = st.sidebar.slider(
     "Confidence Threshold",
-    0.01, 1.00, 0.25, 0.01
-)
-
-distance_mode = st.sidebar.radio(
-    "Distance Source",
-    ["Bounding Box Estimation", "Hardware Distance Simulation"]
-)
-
-hardware_distance = st.sidebar.slider(
-    "Hardware Distance / LiDAR Distance (m)",
-    1.0, 30.0, 10.0, 0.5
+    min_value=0.01,
+    max_value=1.00,
+    value=0.25,
+    step=0.01
 )
 
 approaching_speed = st.sidebar.slider(
     "Approaching Speed (m/s)",
-    0.0, 30.0, 5.0, 0.5
+    min_value=0.0,
+    max_value=20.0,
+    value=5.0,
+    step=0.5
 )
 
 input_type = st.radio(
@@ -60,25 +56,36 @@ else:
 
 
 def estimate_distance(x1, y1, x2, y2):
+    """
+    使用 Bounding Box 面積估算距離。
+    框越大代表物體越近，框越小代表物體越遠。
+    """
+
     area = max(1, (x2 - x1) * (y2 - y1))
 
-    if area > 80000:
-        return 3.0
+    if area > 120000:
+        return 2.0
+    elif area > 70000:
+        return 5.0
     elif area > 30000:
-        return 7.0
+        return 10.0
     else:
-        return 15.0
+        return 20.0
 
 
 def assess_risk(distance_m, approaching_speed_mps):
+    """
+    根據距離與接近速度計算 TTC，並判斷危險程度。
+    """
+
     if approaching_speed_mps <= 0:
         ttc = 999.0
     else:
         ttc = distance_m / approaching_speed_mps
 
-    if distance_m <= 5 or ttc <= 1.5:
+    if distance_m <= 3 or ttc <= 1.0:
         return ttc, "Danger 🔴", "red"
-    elif distance_m <= 12 or ttc <= 3.0:
+    elif distance_m <= 10 or ttc <= 3.0:
         return ttc, "Warning 🟡", "orange"
     else:
         return ttc, "Safe 🟢", "green"
@@ -111,11 +118,7 @@ def detect_objects(image):
             conf = float(box.conf[0])
             label = CLASS_NAMES[cls_id]
 
-            if distance_mode == "Hardware Distance Simulation":
-                distance = hardware_distance
-            else:
-                distance = estimate_distance(x1, y1, x2, y2)
-
+            distance = estimate_distance(x1, y1, x2, y2)
             ttc, status, color = assess_risk(distance, approaching_speed)
 
             draw.rectangle(
@@ -141,7 +144,6 @@ def detect_objects(image):
             detections.append({
                 "Object": label,
                 "Confidence": round(conf, 2),
-                "Distance Source": distance_mode,
                 "Distance": f"{distance:.1f} m",
                 "Approaching Speed": f"{approaching_speed:.1f} m/s",
                 "TTC": f"{ttc:.1f} s",
@@ -175,7 +177,6 @@ if input_file is not None:
                 st.markdown(f"### Object {i}")
                 st.write(f"Object: {det['Object']}")
                 st.write(f"Confidence: {det['Confidence']}")
-                st.write(f"Distance Source: {det['Distance Source']}")
                 st.write(f"Distance: {det['Distance']}")
                 st.write(f"Approaching Speed: {det['Approaching Speed']}")
                 st.write(f"TTC: {det['TTC']}")
