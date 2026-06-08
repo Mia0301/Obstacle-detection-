@@ -7,7 +7,7 @@ from ultralytics import YOLO
 st.set_page_config(page_title="Obstacle Detection System", layout="wide")
 
 st.title("🚗 Obstacle Detection System")
-st.write("YOLOv8 + Camera / Upload + Distance + Speed + TTC Risk Assessment")
+st.write("YOLOv8 + Camera / Upload + Hardware Distance Simulation + TTC Risk Assessment")
 
 @st.cache_resource
 def load_model():
@@ -28,9 +28,19 @@ confidence_threshold = st.sidebar.slider(
     0.01, 1.00, 0.25, 0.01
 )
 
-speed_kmh = st.sidebar.slider(
-    "Vehicle Speed (km/h)",
-    0, 120, 40
+distance_mode = st.sidebar.radio(
+    "Distance Source",
+    ["Bounding Box Estimation", "Hardware Distance Simulation"]
+)
+
+hardware_distance = st.sidebar.slider(
+    "Hardware Distance / LiDAR Distance (m)",
+    1.0, 30.0, 10.0, 0.5
+)
+
+approaching_speed = st.sidebar.slider(
+    "Approaching Speed (m/s)",
+    0.0, 30.0, 5.0, 0.5
 )
 
 input_type = st.radio(
@@ -48,25 +58,23 @@ if input_type == "Upload Image":
 else:
     input_file = st.camera_input("Take a picture")
 
+
 def estimate_distance(x1, y1, x2, y2):
     area = max(1, (x2 - x1) * (y2 - y1))
 
     if area > 80000:
-        distance = 3.0
+        return 3.0
     elif area > 30000:
-        distance = 7.0
+        return 7.0
     else:
-        distance = 15.0
+        return 15.0
 
-    return distance
 
-def assess_risk(distance_m, speed_kmh):
-    speed_ms = speed_kmh / 3.6
-
-    if speed_ms <= 0:
+def assess_risk(distance_m, approaching_speed_mps):
+    if approaching_speed_mps <= 0:
         ttc = 999.0
     else:
-        ttc = distance_m / speed_ms
+        ttc = distance_m / approaching_speed_mps
 
     if distance_m <= 5 or ttc <= 1.5:
         return ttc, "Danger 🔴", "red"
@@ -75,7 +83,8 @@ def assess_risk(distance_m, speed_kmh):
     else:
         return ttc, "Safe 🟢", "green"
 
-def detect_objects(image, speed_kmh, confidence_threshold):
+
+def detect_objects(image):
     results = model.predict(
         image,
         conf=confidence_threshold,
@@ -91,19 +100,23 @@ def detect_objects(image, speed_kmh, confidence_threshold):
             continue
 
         for box in result.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
-
-            conf = float(box.conf[0])
             cls_id = int(box.cls[0])
 
             if cls_id not in CLASS_NAMES:
                 continue
 
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+            x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
+
+            conf = float(box.conf[0])
             label = CLASS_NAMES[cls_id]
 
-            distance = estimate_distance(x1, y1, x2, y2)
-            ttc, status, color = assess_risk(distance, speed_kmh)
+            if distance_mode == "Hardware Distance Simulation":
+                distance = hardware_distance
+            else:
+                distance = estimate_distance(x1, y1, x2, y2)
+
+            ttc, status, color = assess_risk(distance, approaching_speed)
 
             draw.rectangle(
                 [(x1, y1), (x2, y2)],
@@ -113,9 +126,9 @@ def detect_objects(image, speed_kmh, confidence_threshold):
 
             text = (
                 f"{label} {conf:.2f} | "
-                f"{distance:.1f}m | "
-                f"{speed_kmh}km/h | "
-                f"TTC {ttc:.1f}s | "
+                f"Dist:{distance:.1f}m | "
+                f"Speed:{approaching_speed:.1f}m/s | "
+                f"TTC:{ttc:.1f}s | "
                 f"{status}"
             )
 
@@ -128,13 +141,15 @@ def detect_objects(image, speed_kmh, confidence_threshold):
             detections.append({
                 "Object": label,
                 "Confidence": round(conf, 2),
+                "Distance Source": distance_mode,
                 "Distance": f"{distance:.1f} m",
-                "Speed": f"{speed_kmh} km/h",
+                "Approaching Speed": f"{approaching_speed:.1f} m/s",
                 "TTC": f"{ttc:.1f} s",
                 "Status": status
             })
 
     return image, detections
+
 
 with st.expander("Model Information"):
     st.write("Model Classes:", model.names)
@@ -142,11 +157,7 @@ with st.expander("Model Information"):
 if input_file is not None:
     image = Image.open(input_file).convert("RGB")
 
-    result_image, detections = detect_objects(
-        image,
-        speed_kmh,
-        confidence_threshold
-    )
+    result_image, detections = detect_objects(image)
 
     col1, col2 = st.columns([2, 1])
 
@@ -164,8 +175,9 @@ if input_file is not None:
                 st.markdown(f"### Object {i}")
                 st.write(f"Object: {det['Object']}")
                 st.write(f"Confidence: {det['Confidence']}")
+                st.write(f"Distance Source: {det['Distance Source']}")
                 st.write(f"Distance: {det['Distance']}")
-                st.write(f"Speed: {det['Speed']}")
+                st.write(f"Approaching Speed: {det['Approaching Speed']}")
                 st.write(f"TTC: {det['TTC']}")
                 st.write(f"Status: {det['Status']}")
                 st.markdown("---")
