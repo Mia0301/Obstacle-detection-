@@ -11,7 +11,7 @@ st.write("YOLOv8 + Camera / Upload + Hardware Distance Simulation + TTC Risk Ass
 
 @st.cache_resource
 def load_model():
-    return YOLO("best.pt")
+    return YOLO("best_camera.pt")
 
 model = load_model()
 
