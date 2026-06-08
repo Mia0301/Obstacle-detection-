@@ -1,85 +1,117 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Mon May  4 10:41:40 2026
-
-@author: gersh
-"""
 
 import streamlit as st
-from PIL import Image
-import random
-import cv2
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+from ultralytics import YOLO
 
 st.set_page_config(layout="wide")
-st.title("🚗 Obstacle Detection System (Prototype)")
+st.title("🚗 Obstacle Detection System with YOLOv8")
 
+# =========================
+# Load YOLOv8 model
+# =========================
 @st.cache_resource
 def load_model():
-    model = YOLO("yolov8s.pt")
-    return model
+    return YOLO("yolov8s.pt")
 
 model = load_model()
 
+# =========================
+# Class names
+# =========================
+class_names = {
+    0: "Car",
+    1: "Pedestrian",
+    2: "Cyclist"
+}
 
-uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
+uploaded_file = st.file_uploader(
+    "Upload Image",
+    type=["jpg", "png", "jpeg"]
+)
 
-def fake_detection(img):
-    h, w, _ = img.shape
 
-    # 隨機框
-    x1 = random.randint(0, w//2)
-    y1 = random.randint(0, h//2)
-    x2 = x1 + random.randint(100, 300)
-    y2 = y1 + random.randint(100, 300)
-
-    label = random.choice(["Car", "Pedestrian", "Cyclist"])
-    conf = round(random.uniform(0.7, 0.95), 2)
-
-    # 畫框
-    cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
-
-    # 面積模擬距離（越大越近）
+def estimate_distance(x1, y1, x2, y2):
     area = (x2 - x1) * (y2 - y1)
 
     if area > 80000:
-        distance = random.uniform(2, 5)
-        status = "Danger 🔴"
-        color = (0,0,255)
+        distance = 3.0
+        status = "Danger"
+        color = "red"
     elif area > 30000:
-        distance = random.uniform(5, 10)
-        status = "Warning 🟡"
-        color = (0,255,255)
+        distance = 7.0
+        status = "Warning"
+        color = "yellow"
     else:
-        distance = random.uniform(10, 20)
-        status = "Safe 🟢"
-        color = (0,255,0)
+        distance = 15.0
+        status = "Safe"
+        color = "green"
 
-    distance = round(distance, 1)
+    return distance, status, color
 
-    # 在畫面上寫資訊
-    cv2.putText(img, f"{label} {conf}", (x1, y1-25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-    cv2.putText(img, f"{distance}m", (x1, y1-5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+def run_detection(image):
+    results = model(image, conf=0.25)
 
-    return img, label, conf, distance, status
+    draw = ImageDraw.Draw(image)
+    detections = []
 
-if uploaded_file:
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    img = cv2.imdecode(file_bytes, 1)
+    for result in results:
+        for box in result.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+            conf = float(box.conf[0])
+            cls_id = int(box.cls[0])
 
-    img, label, conf, distance, status = fake_detection(img)
+            label = class_names.get(cls_id, f"Class {cls_id}")
 
-    col1, col2 = st.columns([2,1])
+            distance, status, color = estimate_distance(x1, y1, x2, y2)
 
-    # 左邊畫面
-    col1.image(img, channels="BGR", use_container_width=True)
+            # Draw bounding box
+            draw.rectangle(
+                [(x1, y1), (x2, y2)],
+                outline=color,
+                width=4
+            )
 
-    # 右邊資訊
+            text = f"{label} {conf:.2f} | {distance:.1f}m | {status}"
+
+            draw.text(
+                (x1, max(0, y1 - 20)),
+                text,
+                fill=color
+            )
+
+            detections.append({
+                "Object": label,
+                "Confidence": round(conf, 2),
+                "Distance": f"{distance:.1f} m",
+                "Status": status
+            })
+
+    return image, detections
+
+
+if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert("RGB")
+
+    result_image, detections = run_detection(image)
+
+    col1, col2 = st.columns([2, 1])
+
+    col1.image(result_image, use_container_width=True)
+
     col2.subheader("Detection Info")
-    col2.write(f"Object: {label}")
-    col2.write(f"Confidence: {conf}")
-    col2.write(f"Distance: {distance} m")
-    col2.write(f"Status: {status}")
+
+    if len(detections) == 0:
+        col2.warning("No object detected.")
+    else:
+        for i, det in enumerate(detections, 1):
+            col2.markdown(f"### Object {i}")
+            col2.write(f"Object: {det['Object']}")
+            col2.write(f"Confidence: {det['Confidence']}")
+            col2.write(f"Distance: {det['Distance']}")
+            col2.write(f"Status: {det['Status']}")
+            col2.markdown("---")
+else:
+    st.info("Please upload an image to start detection.")
