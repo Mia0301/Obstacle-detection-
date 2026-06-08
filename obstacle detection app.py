@@ -152,7 +152,7 @@ if input_file is not None:
 
     with col1:
         st.subheader("Detection Result")
-        st.image(result_image, use_container_width=True)
+        st.image(result_image, use_column_width=True)
 
     with col2:
         st.subheader("Detection Info")
