@@ -11,7 +11,7 @@ st.write("YOLOv8-based Obstacle Detection")
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8s.pt")
+    return YOLO("yolo26n.pt")
 
 model = load_model()
 
