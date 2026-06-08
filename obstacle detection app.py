@@ -7,7 +7,7 @@ from ultralytics import YOLO
 st.set_page_config(page_title="Obstacle Detection System", layout="wide")
 
 st.title("🚗 Obstacle Detection System")
-st.write("YOLOv8-based obstacle detection prototype")
+st.write("YOLOv8-based Obstacle Detection")
 
 @st.cache_resource
 def load_model():
@@ -22,7 +22,7 @@ CLASS_NAMES = {
 }
 
 uploaded_file = st.file_uploader(
-    "Upload an image",
+    "Upload an Image",
     type=["jpg", "jpeg", "png"]
 )
 
@@ -30,16 +30,16 @@ def estimate_distance(x1, y1, x2, y2):
     area = (x2 - x1) * (y2 - y1)
 
     if area > 80000:
-        return 3.0, "Danger", "red"
+        return 3.0, "Danger 🔴", "red"
     elif area > 30000:
-        return 7.0, "Warning", "orange"
+        return 7.0, "Warning 🟡", "orange"
     else:
-        return 15.0, "Safe", "green"
+        return 15.0, "Safe 🟢", "green"
 
 def detect_objects(image):
-    results = model.predict(image, conf=0.25)
-    draw = ImageDraw.Draw(image)
+    results = model.predict(image, conf=0.25, verbose=False)
 
+    draw = ImageDraw.Draw(image)
     detections = []
 
     for result in results:
@@ -60,10 +60,9 @@ def detect_objects(image):
                 width=4
             )
 
-            text = f"{label} {conf:.2f} | {distance:.1f}m | {status}"
             draw.text(
                 (x1, max(0, y1 - 18)),
-                text,
+                f"{label} {conf:.2f} | {distance:.1f}m | {status}",
                 fill=color
             )
 
@@ -84,7 +83,7 @@ if uploaded_file is not None:
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.image(result_image, use_container_width=True)
+        st.image(result_image, use_column_width=True)
 
     with col2:
         st.subheader("Detection Info")
@@ -92,7 +91,7 @@ if uploaded_file is not None:
         if len(detections) == 0:
             st.warning("No object detected.")
         else:
-            for i, det in enumerate(detections, 1):
+            for i, det in enumerate(detections, start=1):
                 st.markdown(f"### Object {i}")
                 st.write(f"Object: {det['Object']}")
                 st.write(f"Confidence: {det['Confidence']}")
@@ -100,4 +99,4 @@ if uploaded_file is not None:
                 st.write(f"Status: {det['Status']}")
                 st.markdown("---")
 else:
-    st.info("Please upload an image to start detection.")
+    st.info("Please upload an image.")
