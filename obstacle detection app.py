@@ -37,7 +37,7 @@ def estimate_distance(x1, y1, x2, y2):
         return 15.0, "Safe 🟢", "green"
 
 def detect_objects(image):
-    results = model.predict(image, conf=0.25, verbose=False)
+    results = model.predict(image, conf=0.05, verbose=False)
 
     draw = ImageDraw.Draw(image)
     detections = []
