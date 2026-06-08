@@ -14,6 +14,14 @@ import numpy as np
 st.set_page_config(layout="wide")
 st.title("🚗 Obstacle Detection System (Prototype)")
 
+@st.cache_resource
+def load_model():
+    model = YOLO("yolov8s.pt")
+    return model
+
+model = load_model()
+
+
 uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
 def fake_detection(img):
